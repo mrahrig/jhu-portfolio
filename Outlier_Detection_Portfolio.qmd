@@ -38,11 +38,6 @@ This project covers outlier detection methods inclucing boxplots, outlier() test
 Using the City Health dataset (cityhealthdashboard.com) for this assignment, I've selected a subset of 10 variables and produced boxplots of four that are of interest. 
 
 ```{r message=FALSE, warning=FALSE}
-# Remove any existing git configuration
-#usethis::use_git_remote("origin", url = NULL, overwrite = TRUE)
-#unlink(".git", recursive = TRUE)  # Removes local git repo
-
-# Replace with your actual repo URL
 
 library(mvoutlier)
 library(outliers)
@@ -53,7 +48,7 @@ library(rio)
 library(skimr)
 
 # Import dataset   
-chbd <- import("/Users/meganrahrig/Desktop/JHU/Data Science for Policy/Mod 2/chdb.csv")
+chbd <- import("/chdb.csv")
 #colnames(chbd)
 
 # Subset 10 variables

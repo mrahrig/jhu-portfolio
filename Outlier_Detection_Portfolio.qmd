@@ -1,0 +1,298 @@
+---
+title: "Outlier Detection in Policy Analysis"
+author: Megan Rahrig
+format:
+  html:
+    embed-resources: true
+    toc: true 
+    toc-depth: 3    
+    code-fold: true 
+    output-dir: docs
+echo: true
+---
+
+# Introduction
+
+In an era of data-driven policymaking, robust outlier detection serves as a critical safeguard against distorted decision-making. This analysis demonstrates how advanced statistical techniques can surface hidden anomalies in urban health metrics that traditional descriptive methods might overlook. Using the City Health Dashboard's multidimensional dataset, I demonstrate the application of a variety of analytical approaches: 
+
+- Univariate diagnostics (boxplots, IQR tests) to identify extreme values in key indicators like life expectancy and uninsured rates
+
+- Multivariate Mahalanobis distance to detect communities with atypical combinations of health determinants
+
+- Statistical validation (chi-square tests) to distinguish meaningful outliers from measurement artifacts
+
+My findings reveal how certain cities emerge as outliers, not through extreme values in any single dimension, but through unexpected configurations of health factors, which provides direct implications for:
+
+- Precision policy design (tailoring interventions to outlier communities)
+
+- Resource allocation models (adjusting for non-standard population health profiles)
+
+- Data quality governance (identifying potential reporting anomalies)
+
+By comparing methods ranging from simple visualizations to advanced covariance-based metrics, this analysis demonstrates various methodology for detecting and interpreting outliers in public policy datasets. The results underscore why outlier analysis should be a standard phase in any policy research pipeline, particularly when working with complex, multidimensional social indicators where hidden anomalies can significantly impact model outputs and subsequent decisions.
+
+This project covers outlier detection methods inclucing boxplots, outlier() tests, chi-squared tests, and mahalanobis statistics.
+
+## Boxplots
+
+Using the City Health dataset (cityhealthdashboard.com) for this assignment, I've selected a subset of 10 variables and produced boxplots of four that are of interest. 
+
+```{r message=FALSE, warning=FALSE}
+# Remove any existing git configuration
+#usethis::use_git_remote("origin", url = NULL, overwrite = TRUE)
+#unlink(".git", recursive = TRUE)  # Removes local git repo
+
+# Replace with your actual repo URL
+
+library(mvoutlier)
+library(outliers)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(rio)
+library(skimr)
+
+# Import dataset   
+chbd <- import("/Users/meganrahrig/Desktop/JHU/Data Science for Policy/Mod 2/chdb.csv")
+#colnames(chbd)
+
+# Subset 10 variables
+chbd_sub <- chbd %>% select(life_expectancy, blood_pressure, frequent_mental, obesity, inactivity, smoking, uninsured, child_poverty, inequality, walkability)
+```
+
+::: {.panel-tabset}
+## Life Expectancy
+```{r}
+# Create four boxplots
+boxplot(chbd_sub$life_expectancy, ylab="Years")
+title(main = "Life Expectancy")
+```
+
+## Smoking Rate
+```{r}
+boxplot(chbd_sub$smoking, ylab="Percent Pop.")
+title(main = "Smoking Population")
+```
+
+## Uninsured Population
+```{r}
+boxplot(chbd_sub$uninsured, ylab="Percent Pop.")
+title(main = "Uninsured Population")
+```
+
+## Frequent Mental Distress
+```{r}
+boxplot(chbd_sub$frequent_mental, ylab="Percent Pop.")
+title(main = "Frequent Mental Distress")
+```
+:::
+
+The boxplots above visualize outliers through circles above or below the full quartile range. However, with these outliers clustered relatively close to the box plot, we should question whether or not they are "real", or statistically significant outliers, which I will do using chi-squared tests later in this report.
+
+### Summary statistics
+
+```{r message=FALSE, warning=FALSE}
+skim(chbd_sub)
+```
+
+Viewing summary statistics with the skimr() package can help us quantify the visualization of the boxplots. In looking at summary statistics for "Life Expectancy", the mean life expectancy is ~79 years old, and the max is ~85 (6 years higher than mean). The minimum is ~72 (7 years lower than the mean). This lines up with the boxplot visualization.
+
+We can further calculate and confirm outliers using the interquartile range method (IQR).
+- We can calculate the interquartile range for life expectancy as Q3-Q1, which is 3.03 years. 
+- Multiplying this by 1.5 results in 4.55 years, which helps us find the fence for outliers. 
+- Adding the top quartile range to 4.55 results in ~85 years, which the max value of this variable falls directly on, confirming it is not outlier. 
+- Going in the opposite direction, (lower quartile minus our calculation of 4.55) results in a value of 73 years, which our minimum value of 72 falls beneath, demonstrating that this is in fact an outlier. 
+
+Boxplot 2, 3, and 4 contain outliers above the top of the plot. In looking at the plots proportions, some of these appear to be more evenly distributed than others. We can confirm this trend by looking at the histogram in the summary statistics, which visually confirms that these three variables have outliers on the high end, and with "uninsured" appearing more significantly skewed to the left (which can also be seen with the mean line in the box plot laying lower than center). 
+
+
+## Outliers() Package
+
+I used the outliers package to identify the most extreme case for each of the ten variables in the subset. 
+
+```{r message=FALSE, warning=FALSE}
+outliers_cbhd <- outlier(chbd_sub)
+    print(outliers_cbhd) 
+```
+
+These values more quickly help us to identify outliers compared to the boxplot observations or IQR calculations above.
+  
+It is important to note that these numbers are not normalized, so life expectancy, for example, is very high because the numeric value of 72 is a large compared to, say, the numeric value of 35.2. However, these values represent years or life expectancy and percent uninsured respectively. Walkability is a score as opposed to an integer or percentage, so this also affects the interpretability of this representation. 
+  
+## Chi-squared tests
+
+I conducted chi-squared tests for univariate outlier detection for the four variables I selected from my subset. The purose here is to identify statistical significance, or "real" outliers. 
+
+```{r}
+#Lifetime expectancy
+life_exp <- chisq.out.test(chbd_sub$life_expectancy, variance=var(chbd_sub$life_expectancy))
+life_exp
+#smoking
+smoking <- chisq.out.test(chbd_sub$smoking, variance=var(chbd_sub$smoking))
+smoking
+#uninsured 
+uninsured <- chisq.out.test(chbd_sub$uninsured, variance=var(chbd_sub$uninsured))
+uninsured
+#frequent_mental
+mental <- chisq.out.test(chbd_sub$frequent_mental, variance=var(chbd_sub$frequent_mental))
+mental
+```
+
+The chi-squared tests for each of the four variables confirm that the outliers we observed are statistically significant. P-values are below 0.05 for each instance. We can also see reflected in the results the direction of the outliers that we also saw in the box plots: only lifetime expectancy has low outliers while other variables have high outliers. This test confirms with statistical evidence what we can derive from observing the boxplots.
+    
+## Uni.plot
+
+I ran a uni.plot and calculated mahalanobis statistis for my original subset, adding city names back into my dataset to display labels.
+    
+```{r message=FALSE, warning=FALSE}
+
+# Rename columns for legibility
+chbd_sub <- chbd_sub %>%
+  rename(
+    Life_Exp = life_expectancy,
+    BP = blood_pressure,
+    Smokers = smoking,
+    Uninsured = uninsured,
+    Mental = frequent_mental,
+    Obesity = obesity,
+    Inactive = inactivity,
+    Child_Pov = child_poverty,
+    Inc_Ineq = inequality,
+    Walkable = walkability
+  )
+
+# Convert the values to z scores to standardize the data
+zchbd_sub<-scores(chbd_sub, type = c("z"), prob = NA, lim = NA)
+
+# Create uni.plot
+uni<-as.data.frame(uni.plot(chbd_sub, symb=TRUE))
+```
+
+In viewing the uni.plot, we can confirm that, of the four variables we observed in the box plots, life expectancy has outliers that are below average (and mental, uninsured, and smoking have high outliers) as demonstrated by the red plus symbols. It also further illustrates the distribution that we looked at in the box plot and histogram, confirming that the one we looked at specifically (uninsured) has left-skewed distribution. 
+
+## Mahalanobis Statistic
+
+The plot of the mahalanobis statistic reveals Hialeah, FL and Phan, TX stand out as being the furthest outliers for my variable of interest, life expectancy, demonstrating that this value for these cities is atypical. Both cities run near the value 80 years as a life expextancy, which, in recalling earlier statistics, is not a univariate outlyer (and in fact, 80 is very close to the univariate mean). However, this makes sense considering that the mahalanobis distance (MD) demonstrates multivariate outliers, not univariate outliers, and Hialeah's values across the dataset stand out as highly deviating from the dataset's correlation structure. 
+
+I ran mahalanobis statistics/covariance matrix plots for all ten variables out of curiosity and noticed that Hialeah, FL, consistently runs as an outlier with a very high mahalanobis statistic. 
+
+### MD Plots
+
+```{r message=FALSE, warning=FALSE}
+
+# Generate mahalanobic statistic and merge it with the dataframe
+mstat<-mahalanobis(chbd_sub, colMeans(chbd_sub), cov(chbd_sub))
+chbd_sub$mstat<-round(mstat,3)
+
+# Bring city names back to serve as labels
+chbd_sub$citystate<-chbd$citystate
+
+```
+
+::: {.panel-tabset}
+## Life Expectancy
+```{r message=FALSE, warning=FALSE}
+# Plot mahalanobic statistic distance to observe multivariate outliers
+md_life <- ggplot(chbd_sub, aes(x=Life_Exp, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_life 
+```
+
+## Uninsured
+```{r message=FALSE, warning=FALSE}
+md_uninsured <- ggplot(chbd_sub, aes(x=Uninsured, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_uninsured 
+```
+
+## Blood Pressure
+```{r message=FALSE, warning=FALSE}
+md_bp<- ggplot(chbd_sub, aes(x=BP, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_bp 
+```
+
+## Smoking Rate
+```{r message=FALSE, warning=FALSE}
+md_smokers <- ggplot(chbd_sub, aes(x=Smokers, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_smokers
+```
+
+## Mental Distress Frequency
+```{r message=FALSE, warning=FALSE}
+md_mental <- ggplot(chbd_sub, aes(x=Mental, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_mental
+```
+
+## Child Poverty
+```{r message=FALSE, warning=FALSE}
+md_childpov <- ggplot(chbd_sub, aes(x=Child_Pov, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_childpov
+```
+
+## Obesity
+```{r message=FALSE, warning=FALSE}
+md_obesity <- ggplot(chbd_sub, aes(x=Obesity, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_obesity
+```
+
+## Inactivity
+```{r message=FALSE, warning=FALSE}
+md_inactive <- ggplot(chbd_sub, aes(x=Inactive, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_inactive
+```
+
+## Income Inequality
+```{r message=FALSE, warning=FALSE}
+md_inequality <- ggplot(chbd_sub, aes(x=Inc_Ineq, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_inequality
+```
+
+## City Walkability
+```{r message=FALSE, warning=FALSE}
+md_walkable <- ggplot(chbd_sub, aes(x=Walkable, y=mstat, label=citystate))+geom_point()+geom_smooth()+
+geom_text(aes(label=citystate), check_overlap = TRUE)
+md_walkable
+```
+:::
+
+# Conclusion: The Role of Outlier Detection in Policy Analysis
+
+My multivariate analysis revealed how cities like Hialeah, FL emerge as outliers not through extreme values in any single dimension, but through unusual combinations of health indicators - a finding that would otherwise remain hidden with univariate methods alone. As demonstrated by the contrast between univariate and multivariate results, the choice of detection method carries profound implications for policy conclusions. Robust outlier analysis doesn't just clean data - it also reveals the complex realities that shape population health outcomes.
+
+### Key Policy Applications
+
+Targeted Interventions
+
+- The Mahalanobis distance results identify communities requiring tailored policy approaches where standard interventions may fail due to atypical health determinant configurations.
+
+Data Validation
+
+- The chi-square tests and IQR analysis provide rigorous methods to distinguish between true systemic outliers (e.g., cities with legitimately unusual health profiles) versus data errors.
+
+Equity Assessments
+
+- The left-skew in uninsured rates (with high-end outliers) suggests potential systemic barriers in certain jurisdictions that warrant deeper investigation.
+
+### Beyond Basic Methods: Advanced Approaches
+
+For more nuanced policy analysis, future work could incorporate:
+
+- Spatial outlier detection: Accounting for geographic clustering in health metrics
+
+- Time-series anomaly detection: Tracking how outliers evolve across policy cycles
+
+- Machine learning hybrids: Combining isolation forests with domain-specific rules
+
+- Causal outlier analysis: Distinguishing between outliers driven by policy vs. external factors
+
+# Database Citation
+> City Health Dashboard, https://www.cityhealthdashboard.com/
+
+
